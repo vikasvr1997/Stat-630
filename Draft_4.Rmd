@@ -11,6 +11,8 @@ library(pacman)
 pacman::p_load(tidyverse, plotly,car,MASS, caret, ggExtra, gtsummary)
 ```
 
+[Dataset Link](https://www.kaggle.com/datasets/kumarajarshi/life-expectancy-who)
+
 ```{r}
 life_exp <- read.csv("/Users/vikasreddybodireddy/Desktop/630 drafts/Life Expectancy Data.csv")
 n_1<- nrow(life_exp)
@@ -386,7 +388,7 @@ Slope($\hat{48876 }$): This coefficient indicates the amount of change in the cu
 
 ## MLR(Multi Linear regression for all the traits included).
 
-MLR : Here the model equation for Multi linear regression is $$Y = \beta_0 +\beta_1*X_1 + \beta_3*X_2+\beta_4*X_3+\beta_5*X_4+\beta_6*X_5 +\beta_7*X_6+\epsilon $$ 
+MLR : Here the model equation for Multi linear regression is $$Y = \beta_0 +\beta_1*X_1 + \beta_3*X_2+\beta_4*X_3+\beta_5*X_4+\beta_6*X_5 +\beta_7*X_6+\epsilon $$
 
 Our Model Equation at begining of the Multi linear regression is :$$LifeExpectation = \beta_0 +\beta_1*Adult Mortality +\beta_3*Alcohol+\beta_4*IncomeComposition+\beta_5*Schooling+\beta_6*Status+\beta_7*GDP+\epsilon $$
 
@@ -433,4 +435,3 @@ xlab("Fitted Values") +
 ylab("Residuals") +
 ggtitle("Final Model Residual vs Fitted Values")
 ```
-
