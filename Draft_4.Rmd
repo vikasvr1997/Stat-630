@@ -1,0 +1,436 @@
+---
+title: "Draft 4"
+author: "Vikas_Reddy_Bodireddy"
+date: "2023-12-04"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+library(pacman)
+pacman::p_load(tidyverse, plotly,car,MASS, caret, ggExtra, gtsummary)
+```
+
+```{r}
+life_exp <- read.csv("/Users/vikasreddybodireddy/Desktop/630 drafts/Life Expectancy Data.csv")
+n_1<- nrow(life_exp)
+n_2 <- nrow(na.omit(life_exp))
+# Total rows with NA
+n_1
+#total rows without NA
+n_2
+```
+
+**Here there are more than 40% data missing in our dataset, so we have taken mean of data and add those to the Missing values into the data.**
+
+Imputing the missing values:
+
+```{r}
+numerical_columns <- c("Life.expectancy","Adult.Mortality", "infant.deaths", "Alcohol", "percentage.expenditure", "Hepatitis.B", "Measles", "BMI", "under.five.deaths", "Polio", "Total.expenditure", "Diphtheria", "HIV.AIDS", "GDP", "Population", "thinness..1.19.years", "thinness.5.9.years", "Income.composition.of.resources", "Schooling")
+
+for (col in numerical_columns) {
+  life_exp[[col]][is.na(life_exp[[col]])] <- mean(life_exp[[col]], na.rm = TRUE)
+}
+categorical_columns <- c("Country", "Status")
+
+getmode <- function(v) {
+   uniqv <- unique(v)
+   uniqv[which.max(tabulate(match(v, uniqv)))]
+}
+
+for (col in categorical_columns) {
+  mode_value <- getmode(life_exp[[col]][!is.na(life_exp[[col]])])
+  life_exp[[col]][is.na(life_exp[[col]])] <- mode_value
+}
+# rows with NA values after mean imputation.
+sum(is.na(life_exp))
+
+life_exp <- life_exp
+summary(life_exp)
+dim(life_exp)
+```
+
+## SLR - for Individual Variables:
+
+```{r}
+create_life_exp_subset <- function(data, selected_year) {
+  data_subset <- data %>%
+ # filter(Year == selected_year) %>%
+  select(Life.expectancy, Adult.Mortality, Alcohol, 
+         Income.composition.of.resources, Schooling, Country, 
+         Status, GDP) %>%
+  na.omit() %>%
+  mutate(
+    
+    life_exp = Life.expectancy,
+    adult_mortality = Adult.Mortality,
+    alcohol = Alcohol,
+    income_composition = Income.composition.of.resources,
+    schooling = Schooling, gdp = GDP 
+  ) %>%
+  select(life_exp, adult_mortality, alcohol, income_composition, schooling,
+          gdp)
+}#user_input <- readline(prompt = "Enter the year from 2001 to 2015: ")
+
+#selected_year <- as.integer(user_input = 2004)
+
+selected_year <- as.integer(2004)
+
+life_exp2 <- create_life_exp_subset(life_exp, selected_year)
+
+# Continue with other operations on the life_exp_subset
+numeric_data <- select_if(life_exp2, is.numeric)
+summary(life_exp2)
+print(dim(life_exp2))
+```
+
+```{r}
+set.seed(999)
+splitIndex <- createDataPartition(life_exp2$life_exp, p = 0.7, list = FALSE)
+train_data <- life_exp2[splitIndex, ]
+test_data <- life_exp2[-splitIndex, ]
+
+ggplot(data = train_data, aes(x = (life_exp))) +
+  geom_histogram( fill = 'orange', color = 'white', alpha = 0.7) +
+  geom_density(alpha = 0.2, fill = 'blue') +
+  labs(title = 'Distribution of Life Expectancy', x = 'Life Expectancy') +
+  theme_minimal()
+```
+
+```{r}
+ggplot(data = train_data, aes(x = (life_exp)^3)) +
+  geom_histogram( fill = 'orange', color = 'white', alpha = 0.7) +
+  geom_density(alpha = 0.2, fill = 'blue') +
+  labs(title = 'Distribution of Life Expectancy', x = 'Life Expectancy^3') +
+  theme_minimal()
+```
+
+SLR Based on our Predictor of Interest: Predictors of Interest: Schooling, income composition, gdp, alcohol Assumptions: Independence: All participant data is independent of each other, as each value for country is also determined by the year and doesnot depend on its subsequent years.
+
+```{r}
+
+lm_scl <- lm(life_exp ~ schooling, data = train_data)
+summary(lm_scl)
+
+# Linearity: From Scatter plot linearity is satisfied.
+plot_1 <- ggplot(data = train_data, aes(y = life_exp, x = schooling)) +
+          geom_point() +
+          geom_smooth(method = "lm", se = FALSE)+
+  ggtitle("Life Expectancy versus Schooling")+
+  labs(X = "Schooling In years", y = " Life Expectancy in Age")
+ggExtra::ggMarginal(plot_1, type = "histogram")
+
+#Normality: Though the plot seems to be good, there are many points that pull the lower tail down.
+residuals <- rstandard(lm_scl)
+residuals_df <- data.frame(std_residuals = residuals)
+
+# Then use it directly in the ggplot call
+ggplot(data = residuals_df, aes(sample = residuals)) +
+  stat_qq_line(linewidth = 1, color = "orange") +
+  stat_qq() +
+  ggtitle("Normality Q-Q Plot of Residual Values")+
+  labs(y = "Standardized Residuals", x = "Theoretical Quantiles( Life Expectancy^3 ~ Schooling)")
+  
+# from The plot we can see that Life expectancy values are left skewed(from 
+#bottom to top), and voilate normal distribution, similarly we can see that schooling is also left skewed but its only because there are few people who didnot disclose their education or may be had no education at all, so we may need to transform life_expectancy with power 2 and Schooling with sqrtif needed.
+# so we may nee
+
+#Homoscedacity: Variance is not distributed clearly.
+# Residuals vs. Fitted Plot (Homoscedasticity)
+  fitted_values <- fitted(lm_scl)
+  resid_values <- resid(lm_scl)
+  ggplot(data.frame(fitted_values, resid_values), 
+                                 aes(x = fitted_values, y = resid_values)) +
+    geom_point() +
+    geom_hline(yintercept = 0, linetype = "dashed") +
+    ggtitle("Residuals vs. Fitted Plot")+
+    labs(x = "Fitted values", y = "Residuals")
+```
+
+```{r}
+
+lm_scl_2 <- lm(life_exp^3 ~ (schooling), data = train_data)
+summary(lm_scl)
+
+# Linearity: From Scatter plot linearity is satisfied.
+plot_2 <- ggplot(data = train_data, aes(y = life_exp^3, x = (schooling)) )+
+          geom_point() +
+          geom_smooth(method = "lm", se = FALSE)
+ggExtra::ggMarginal(plot_1, type = "histogram")
+
+#Normality: Though the plot seems to be good, there are many points that pull the lower tail down.
+plot(lm_scl_2, which = 2)
+
+
+#Homoscedacity: Variance is not distributed clearly.
+plot(lm_scl_2, which = 1)
+```
+
+## Final Model
+
+```{r}
+set.seed(999)
+
+lm_scl_2 <- lm((life_exp)^3 ~ (schooling), data = life_exp2)
+
+remove_high_leverage <- function(model, data) {
+  n <- nrow(data)
+  p <- length(coef(model))  # Number of predictors including intercept
+  leverage_threshold <- 2 * (p + 1) / n
+
+  leverage_points <- which(hatvalues(model) > leverage_threshold)
+  data_cleaned <- data[-leverage_points, ]
+
+  return(data_cleaned)
+}
+life_exp2_cleaned <- remove_high_leverage(lm_scl_2, life_exp2)
+
+splitIndex <- createDataPartition(life_exp2_cleaned$life_exp, p = 0.7, list = FALSE)
+train_data_1 <- life_exp2_cleaned[splitIndex, ]
+test_data_1 <- life_exp2_cleaned[-splitIndex, ]
+
+create_plots <- function(model, data) {
+  # Linearity Plot
+  summary_model <- summary(model)
+  plot_linearity <- ggplot(data, aes(x = schooling, y = (life_exp^3))) +
+    geom_point() +
+    geom_smooth(method = "lm", se = FALSE)+
+     ggtitle("Life Expectancy versus Schooling")+
+  labs(X = "Schooling In years", y = " Life Expectancy in Age")
+  linearity_plot <- ggExtra::ggMarginal(plot_linearity, type = "histogram")
+
+  # Q-Q Plot (Normality)
+ 
+ residuals <- rstandard(model)
+residuals_df <- data.frame(std_residuals = residuals)
+
+# Then use it directly in the ggplot call
+plot_qq <- ggplot(data = residuals_df, aes(sample = residuals)) +
+  stat_qq_line(color = "red") +
+  stat_qq()+
+  ggtitle("Normality Q-Q Plot of Residual Values")+
+  labs(y = "Standardized Residuals", x = "Theoretical Quantiles( Life Expectancy^3 ~ Schooling)")
+  # Residuals vs. Fitted Plot (Homoscedasticity)
+  fitted_values <- fitted(model)
+  resid_values <- resid(model)
+  plot_resid_vs_fitted <- ggplot(data.frame(fitted_values, resid_values), 
+                                 aes(x = fitted_values, y = resid_values)) +
+    geom_point() +
+    geom_hline(yintercept = 0, linetype = "dashed") +
+    ggtitle("Residuals vs. Fitted Plot")+
+    labs(x = "Fitted values", y = "Residuals")
+  return(list(summary = summary_model,linearity = linearity_plot, qq = plot_qq, resid_vs_fitted = plot_resid_vs_fitted))
+}
+
+# Example usage
+
+create_plots(lm_scl_2, train_data_1)
+
+
+
+```
+
+Accuracy of the Model:
+
+## Life.Expectancy VS Alcohol
+
+Model 1:
+
+Linearity: Scatter plot - Not satisfied
+
+```{r}
+
+lm_ach <- lm(data = train_data, life_exp^3 ~ (alcohol))
+create_plots <- function(model, data) {
+# Linearity Plot
+  summary_model <- summary(model)
+  plot_linearity <- ggplot(data, aes(x = alcohol, y = life_exp^3)) +
+    geom_point() +
+    geom_smooth(method = "lm", se = FALSE)+
+    ggtitle("Life Expectancy with respect to alcohol")+
+    labs(x = "Alcohol", y = "Life Expectancy^3")
+ # linearity_plot <- ggExtra::ggMarginal(plot_linearity, type = "histogram")
+
+# Q-Q Plot (Normality)
+
+plot_qq <- ggplot(data = data, aes(sample = rstandard(model))) +
+  stat_qq_line(linewidth = 1, col = "red") +
+  stat_qq()+
+  ggtitle("Normality Q-Q Plot of Residuals")+
+  labs(x = "standardized residuals ", y = "Theoretical Quantiles")
+
+# Residuals vs. Fitted Plot (Homoscedasticity)
+  fitted_values <- fitted(model)
+  resid_values <- resid(model)
+  plot_resid_vs_fitted <- ggplot(data.frame(fitted_values, resid_values), 
+                                 aes(x = fitted_values, y = resid_values)) +
+    geom_point() +
+    geom_hline(yintercept = 0, linetype = "dashed") +
+    ggtitle("Residuals vs. Fitted values Plot")+
+    labs(x = "Fitted Values", y = "Residuals")
+
+  return(list(summary = summary_model,linearity = plot_linearity, qq = plot_qq, resid_vs_fitted = plot_resid_vs_fitted))
+}
+
+# Example usage
+
+create_plots(lm_ach, train_data)
+
+```
+
+Final Model :
+
+```{r}
+set.seed(999)
+#train_data$cube_alcohol<- train_data$alcohol
+lm_ach_reduced <- lm(data = train_data, life_exp^3 ~ sqrt(alcohol))
+
+create_plots <- function(model, data) {
+# Linearity Plot
+  summary_model <- summary(model)
+  plot_linearity <- ggplot(data, aes(x =sqrt(alcohol), y = life_exp^3)) +
+    geom_point() +
+    geom_smooth(method = "lm", se = FALSE)
+  linearity_plot <- ggExtra::ggMarginal(plot_linearity, type = "histogram")
+
+# Q-Q Plot (Normality)
+residuals <- rstandard(model)
+residuals_df <- data.frame(std_residuals = residuals)
+
+# Then use it directly in the ggplot call
+plot_qq <- ggplot(data = residuals_df, aes(sample = residuals)) +
+  stat_qq() +
+  stat_qq_line(color = "red") +
+  ggtitle("Q-Q Plot of Residuals")
+  #histogram
+gg_hist<- ggplot(data = data, aes(x = sqrt(alcohol))) +
+  geom_histogram( fill = 'orange', color = 'white', alpha = 0.7) +
+  geom_density(alpha = 0.2, fill = 'blue') +
+  labs(title = 'Distribution of Life Expectancy', x = 'Alcohol') +
+  theme_minimal()
+
+# Residuals vs. Fitted Plot (Homoscedasticity)
+  fitted_values <- fitted(model)
+  resid_values <- resid(model)
+  plot_resid_vs_fitted <- ggplot(data.frame(fitted_values, resid_values), 
+                                 aes(x = fitted_values, y = resid_values)) +
+    geom_point() +
+    geom_hline(yintercept = 0, linetype = "dashed") +
+    ggtitle("Residuals vs. Fitted Plot")
+
+  return(list(summary = summary_model,linearity = linearity_plot, qq = plot_qq, histogram = gg_hist, resid_vs_fitted = plot_resid_vs_fitted))
+}
+create_plots(lm_ach_reduced, train_data)
+
+```
+
+## Conclusion:
+
+### **Schooling:**
+
+Hypothesis:Null Hypothesis: $H_0$ there is no relationship between Life Expectancy and Schooling. i.e $\beta_1$ = 0,
+
+and the model equation is $Y$ = $\beta_0+\epsilon$
+
+Alternate Hypothesis: $H_A$ There is a relationship between life Expectancy and Schooling. i.e $\beta_1\neq0$,
+
+and the model equation is $Y = \beta_0+ \beta_1*X_1+\epsilon$
+
+Linearity: satisfied.
+
+Independence: all the data is independent of each other.
+
+Normality: From the qqplot we can see the plot is almost normal, eventhough we have the tails are little distorted.
+
+T-test statistic: From above the test statistic value for life expectancy to schooling is 62.27, and
+
+P value is 2.2\*$10^{-16}$ as p value is nearer to 0 we reject the Null Hypothesis $H_0$ : and conclude that there is relationship between Life Expectancy and Schooling.
+
+Conclusion: The final estimated model equation is $\hat{life expectancy}^3 = \hat{939.58 }+ \hat{325.81}*Schooling+ \epsilon$
+
+**Interpretation:**
+
+Intercept (939.58) : the estimated value of squared life expectancy value when Schooling is 0.
+
+Slope( 325.81) : The estimated change in squared value of life expectancy for one unit change in value of schooling. in general, for every year increase in schooling the squared life expectancy value is expected to increase by 325.81.
+
+#### **Alcohol:**
+
+Hypothesis:Null Hypothesis: $H_0$ there is no relationship between Life Expectancy and Schooling. i.e $\beta_2$ = 0,
+
+and the model equation is $Y$ = $\beta_0+\epsilon$
+
+Alternate Hypothesis: $H_A$ There is a relationship between life Expectancy and Schooling. i.e $\beta_2\neq0$,
+
+and the model equation is $Y = \beta_0+ \beta_2*X_2+\epsilon$
+
+Linearity: satisfied.
+
+Independence: all the data is independent of each other.
+
+Normality: From the qqplot we can see the plot is almost normal, eventhough we have the tails are little distorted.
+
+T-test statistic: From above the test statistic value for life expectancy to schooling is 19.86, and
+
+P value is 2.2\*$10^{-16}$ as p value is nearer to 0 we reject the Null Hypothesis $H_0$ : and conclude that there is relationship between Life Expectancy and Schooling.so we reject the Null Hypothesis and conclude that there is a relationship between Alcohol and Life_expectancy.
+
+and the relationship is positive.
+
+Conclusion: The final estimated model equation is $\hat{life expectancy}^3 = \hat{257179 }+ \hat{48876 }*{Alcohol}^{}+ \epsilon$
+
+Interpretation:
+
+intercept ($\hat{257179}$): This coefficient is the estimated cube of life expectancy when the square root of alcohol consumption is zero. It represents the starting point of the relationship between the cubic life expectancy and the square root of alcohol consumption according to the model's fit to the data.
+
+Slope($\hat{48876 }$): This coefficient indicates the amount of change in the cube of life expectancy for each one-unit increase in the square root of alcohol consumption. It suggests that if the square root of alcohol consumption increases by one unit (which corresponds to alcohol consumption itself increasing by the square of that amount), the model predicts an increase of 48876 in the cube of life expectancy.
+
+## MLR(Multi Linear regression for all the traits included).
+
+MLR : Here the model equation for Multi linear regression is $$Y = \beta_0 +\beta_1*X_1 + \beta_3*X_2+\beta_4*X_3+\beta_5*X_4+\beta_6*X_5 +\beta_7*X_6+\epsilon $$ 
+
+Our Model Equation at begining of the Multi linear regression is :$$LifeExpectation = \beta_0 +\beta_1*Adult Mortality +\beta_3*Alcohol+\beta_4*IncomeComposition+\beta_5*Schooling+\beta_6*Status+\beta_7*GDP+\epsilon $$
+
+```{r}
+#Linearityby pairs plot and lm model:
+lm_multi <- lm(data = train_data, life_exp ~ adult_mortality + alcohol+ income_composition + schooling+gdp)
+summary(lm_multi)
+vif(lm_multi)
+AIC(lm_multi)
+#Normality
+residuals <- rstandard(lm_multi)
+residuals_df <- data.frame(std_residuals = residuals)
+
+# Then use it directly in the ggplot call
+ggplot(data = residuals_df, aes(sample = residuals)) +
+  stat_qq_line(color = "red") +
+  stat_qq() +
+  ggtitle("Q-Q Plot of Residuals")
+#
+ggplot(data = train_data, aes(x = lm_multi$fitted.values, y = lm_multi$residuals)) +
+geom_point(shape = 19, col = "blue") +
+xlab("Fitted Values") +
+ylab("Residuals") +
+ggtitle("Residual vs Fitted Values")
+
+#Best Fit equation:
+step(lm_multi, direction = "both")
+
+lm_best_fit <-lm(formula = life_exp ~ adult_mortality + income_composition 
+                 + alcohol+
+    schooling + gdp, data = train_data)
+summary(lm_best_fit)
+#Normality
+ggplot(data = train_data, aes(sample = rstandard(lm_best_fit))) +
+stat_qq() +
+stat_qq_line(linewidth = 1, col ="red") +
+xlab("Theoretical Quantiles") +
+ylab("Standardized Residuals") +
+ggtitle("Final Model Normal Q-Q Plot")
+#
+ggplot(data = train_data, aes(x = lm_best_fit$fitted.values, y = lm_best_fit$residuals)) +
+geom_point(shape = 19, col = "blue") +
+xlab("Fitted Values") +
+ylab("Residuals") +
+ggtitle("Final Model Residual vs Fitted Values")
+```
+
