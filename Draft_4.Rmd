@@ -131,7 +131,7 @@ ggplot(data = residuals_df, aes(sample = residuals)) +
   stat_qq_line(linewidth = 1, color = "orange") +
   stat_qq() +
   ggtitle("Normality Q-Q Plot of Residual Values")+
-  labs(y = "Standardized Residuals", x = "Theoretical Quantiles( Life Expectancy^3 ~ Schooling)")
+  labs(y = "Standardized Residuals", x = "Theoretical Quantiles( Life Expectancy ~ Schooling)")
   
 # from The plot we can see that Life expectancy values are left skewed(from 
 #bottom to top), and voilate normal distribution, similarly we can see that schooling is also left skewed but its only because there are few people who didnot disclose their education or may be had no education at all, so we may need to transform life_expectancy with power 2 and Schooling with sqrtif needed.
@@ -151,11 +151,11 @@ ggplot(data = residuals_df, aes(sample = residuals)) +
 
 ```{r}
 
-lm_scl_2 <- lm(life_exp^3 ~ (schooling), data = train_data)
-summary(lm_scl)
+lm_scl_2 <- lm(life_exp^3 ~ (schooling)^3, data = train_data)
+summary(lm_scl_2)
 
 # Linearity: From Scatter plot linearity is satisfied.
-plot_2 <- ggplot(data = train_data, aes(y = life_exp^3, x = (schooling)) )+
+plot_2 <- ggplot(data = train_data, aes(y = life_exp^3, x = (schooling)^3) )+
           geom_point() +
           geom_smooth(method = "lm", se = FALSE)
 ggExtra::ggMarginal(plot_1, type = "histogram")
@@ -173,7 +173,7 @@ plot(lm_scl_2, which = 1)
 ```{r}
 set.seed(999)
 
-lm_scl_2 <- lm((life_exp)^3 ~ (schooling), data = life_exp2)
+
 
 remove_high_leverage <- function(model, data) {
   n <- nrow(data)
@@ -185,11 +185,10 @@ remove_high_leverage <- function(model, data) {
 
   return(data_cleaned)
 }
-life_exp2_cleaned <- remove_high_leverage(lm_scl_2, life_exp2)
+life_exp2_cleaned <- remove_high_leverage(lm_scl_2, train_data)
 
-splitIndex <- createDataPartition(life_exp2_cleaned$life_exp, p = 0.7, list = FALSE)
-train_data_1 <- life_exp2_cleaned[splitIndex, ]
-test_data_1 <- life_exp2_cleaned[-splitIndex, ]
+lm_scl_2 <- lm(life_exp^3 ~ schooling, data = life_exp2_cleaned)
+summary(lm_scl_2)
 
 create_plots <- function(model, data) {
   # Linearity Plot
@@ -226,7 +225,7 @@ plot_qq <- ggplot(data = residuals_df, aes(sample = residuals)) +
 
 # Example usage
 
-create_plots(lm_scl_2, train_data_1)
+create_plots(lm_scl_2, train_data)
 
 
 
@@ -348,7 +347,7 @@ T-test statistic: From above the test statistic value for life expectancy to sch
 
 P value is 2.2\*$10^{-16}$ as p value is nearer to 0 we reject the Null Hypothesis $H_0$ : and conclude that there is relationship between Life Expectancy and Schooling.
 
-Conclusion: The final estimated model equation is $\hat{life expectancy}^3 = \hat{939.58 }+ \hat{325.81}*Schooling+ \epsilon$
+Conclusion: The final estimated model equation is $\hat{life expectancy}^3 = \hat{5668 }+ \hat{28662}*Schooling+ \epsilon$
 
 **Interpretation:**
 
